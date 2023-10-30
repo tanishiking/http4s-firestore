@@ -23,12 +23,15 @@ import com.google.firestore.v1.firestore.GetDocumentRequest.ConsistencySelector
 import org.http4s.Header.ToRaw
 import org.typelevel.ci.CIString
 import com.google.protobuf.timestamp.Timestamp
-
+import fs2.io.net.tls.TLSContext
+import com.google.firestore.v1.firestore.CreateDocumentRequest
+import com.google.firestore.v1.document.Value
+import com.google.firestore.v1.document.Value.ValueTypeOneof
 
 object Main extends IOApp:
   override def run(args: List[String]): IO[ExitCode] =
     val projectId: String = args(0)
-    val databaseId: String = args(1)
+    val databaseId: String = "(default)" // args(1)
     val accessToken: String = args(2)
     createClient().use { rawClient =>
       // println(s"projectId: $projectId")
@@ -43,20 +46,35 @@ object Main extends IOApp:
       val firestore = Firestore.fromClient(
         client,
         Uri
-          .fromString("https://firestore.googleapis.com/$rpc")
+          .fromString("https://firestore.googleapis.com")
           .getOrElse(throw new RuntimeException("invalid firestore uri"))
       )
-      val docId = "3hzB2ZWM0wkOKiiR8Gcz"
+      val docId = "1"
       firestore
-        .getDocument(
-          GetDocumentRequest.of(
-            name = createDocumentName(projectId, databaseId, "jokes", docId),
-            mask = None,
-            consistencySelector = ConsistencySelector.ReadTime(Timestamp.defaultInstance)
+        .createDocument(
+          CreateDocumentRequest.of(
+            parent = s"projects/$projectId/databases/$databaseId/documents",
+            collectionId = "jokes",
+            documentId = docId,
+            document = Some(Document.of(
+              name = "",
+              fields = Map(
+                "joke" -> Value.of(
+                  ValueTypeOneof.StringValue("futon ga futtonda")
+                )
+              ),
+              createTime = None,
+              updateTime = None
+            )),
+            mask = None
           ),
           Headers.of(
-            headers.Authorization(Credentials.Token(AuthScheme.Bearer, accessToken)),
-            headers.`Content-Type`(new MediaType("application", "application/x-protobuf"))
+            headers.Authorization(
+              Credentials.Token(AuthScheme.Bearer, accessToken)
+            ),
+            headers.`Content-Type`(
+              new MediaType("application", "grpc")
+            )
           )
         )
         .flatMap { doc =>
@@ -74,7 +92,7 @@ object Main extends IOApp:
       jokeId: String
   ): String = {
     val documentPath = s"projects/$projectId/databases/$databaseId/documents"
-    val res= s"$documentPath/$collectionId/$jokeId"
+    val res = s"$documentPath/$collectionId/$jokeId"
     println(res)
     res
   }
